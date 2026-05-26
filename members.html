@@ -133,19 +133,23 @@
     `${sorted.length} members · tap a name for full details`;
 
   document.getElementById('members-tbody').innerHTML = sorted.map(member => {
-    // Find all meetings where this member wins
-    const payouts = MEETING_DATA.meetings.filter(m =>
-      m.winners.some(w => member.slots.includes(w))
-    );
+    // Find all meetings where this member wins, with slot count per date
+    const payouts = MEETING_DATA.meetings
+      .map(m => ({
+        date: m.date,
+        count: m.winners.filter(w => member.slots.includes(w)).length
+      }))
+      .filter(p => p.count > 0);
 
-    const dateItems = payouts.map(m => {
-      const d = parseDate(m.date);
+    const dateItems = payouts.map(p => {
+      const d = parseDate(p.date);
       const diff = Math.round((d - t) / 86400000);
       let cls = 'payout-date-item upcoming';
       if (diff < 0) cls = 'payout-date-item passed';
       else if (diff === 0) cls = 'payout-date-item today';
-      return `<span class="${cls}">${formatDate(m.date)}</span>`;
-    }).join('');
+      const label = formatDate(p.date) + (p.count > 1 ? ` (${p.count})` : '');
+      return `<span class="${cls}">${label}</span>`;
+    }).join('<span style="color:var(--text-dim);">, </span>');
 
     const datesHtml = payouts.length > 0
       ? `<div class="payout-dates">${dateItems}</div>`
