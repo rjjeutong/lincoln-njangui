@@ -8,6 +8,44 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    .print-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .print-btn:hover { border-color: var(--gold-border); color: var(--gold); }
+    .table-wrap { overflow-x: auto; }
+    .members-link {
+      font-size: 14px;
+      color: var(--text-muted);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.15s;
+    }
+    .members-link:hover { color: var(--gold); }
+    @media (max-width: 480px) {
+      .meeting-table .meeting-date-cell { display: none; }
+    }
+    @media print {
+      .action-bar, .mark-btn, .site-footer { display: none; }
+    }
+  </style>
 </head>
 <body>
 
@@ -18,25 +56,29 @@
     <p class="subtitle">Every other Sunday &middot; 14 Meetings &middot; Round 2026</p>
   </header>
 
-  <div id="next-meeting-banner"></div>
+  <!-- Stats -->
+  <div class="stats-grid" id="stats-grid"></div>
 
-  <div class="progress-section">
-    <div class="progress-label">
-      <span id="progress-text">Loading&hellip;</span>
-      <span class="progress-count" id="progress-count"></span>
-    </div>
-    <div class="progress-bar-track">
-      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
-    </div>
+  <!-- Action bar -->
+  <div class="action-bar">
+    <a href="members.html" class="members-link">👥 View Members</a>
+    <button class="print-btn" onclick="window.print()">Print Schedule</button>
   </div>
 
-  <p class="section-title" style="margin-bottom:12px">Schedule</p>
-  <div id="schedule-list"></div>
-
-  <nav style="display:flex;gap:10px;justify-content:center;padding:28px 0 8px;border-top:1px solid var(--border);margin-top:12px">
-    <a href="members.html" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:13px;font-weight:500;padding:9px 18px;text-decoration:none;transition:all 0.15s" onmouseover="this.style.color='var(--gold)';this.style.borderColor='var(--gold-border)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">👥 Members</a>
-    <a href="admin.html" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:13px;font-weight:500;padding:9px 18px;text-decoration:none;transition:all 0.15s" onmouseover="this.style.color='var(--gold)';this.style.borderColor='var(--gold-border)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">⚙ Organizer</a>
-  </nav>
+  <!-- Schedule Table -->
+  <div class="table-wrap">
+    <table class="meeting-table" id="meeting-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Winners (6 slots)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
 
 </div>
 
@@ -51,18 +93,16 @@
     return new Date(y, m - 1, d);
   }
 
-  function formatLong(str) {
+  function formatShort(str) {
     return parseDate(str).toLocaleDateString('en-US', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      weekday: 'short', month: 'short', day: 'numeric'
     });
   }
 
-  function countdownLabel(str) {
-    const diff = Math.round((parseDate(str) - today()) / 86400000);
-    if (diff < 0) return 'Passed';
-    if (diff === 0) return 'Today!';
-    if (diff === 1) return 'Tomorrow';
-    return `In ${diff} days`;
+  function formatLong(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric'
+    });
   }
 
   function escHtml(s) {
@@ -74,73 +114,91 @@
     catch { return []; }
   }
 
-  function isMeetingDone(m) {
-    return getCompletions().includes(m.num) || parseDate(m.date) < today();
+  function saveCompletions(arr) {
+    localStorage.setItem('meeting_completions', JSON.stringify(arr));
   }
 
-  function renderBanner() {
+  function isMeetingDone(num) {
+    const m = MEETING_DATA.meetings.find(x => x.num === num);
+    if (!m) return false;
+    return getCompletions().includes(num) || parseDate(m.date) < today();
+  }
+
+  function renderStats() {
     const t = today();
-    const next = MEETING_DATA.meetings.find(m => parseDate(m.date) >= t);
-    const el = document.getElementById('next-meeting-banner');
-    if (!next) {
-      el.innerHTML = `<div class="next-meeting-banner"><span class="banner-icon">🏁</span>
-        <div class="banner-text"><div class="banner-label">All meetings complete</div>
-        <div class="banner-date">Round 2026 is done!</div></div></div>`;
-      return;
-    }
-    const cd = countdownLabel(next.date);
-    el.innerHTML = `<div class="next-meeting-banner">
-      <span class="banner-icon">${cd === 'Today!' ? '🎉' : '📅'}</span>
-      <div class="banner-text">
-        <div class="banner-label">${cd === 'Today!' ? 'Meeting Today' : 'Next Meeting — #' + next.num}</div>
-        <div class="banner-date">${formatLong(next.date)}</div>
-        <div class="banner-countdown">${cd}</div>
-      </div></div>`;
-  }
-
-  function renderProgress() {
     const total = MEETING_DATA.totalMeetings;
-    const done = MEETING_DATA.meetings.filter(isMeetingDone).length;
-    document.getElementById('progress-text').textContent = `${done} of ${total} meetings completed`;
-    document.getElementById('progress-count').textContent = `${done}/${total}`;
-    document.getElementById('progress-bar').style.width = `${(done / total) * 100}%`;
+    const done = MEETING_DATA.meetings.filter(m => isMeetingDone(m.num)).length;
+    const remaining = total - done;
+    const next = MEETING_DATA.meetings.find(m => parseDate(m.date) >= t);
+    const nextLabel = next ? formatLong(next.date) : 'All done!';
+
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--green)">${done}</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--blue)">${remaining}</div>
+        <div class="stat-label">Remaining</div>
+      </div>
+      <div class="stat-card" style="grid-column: 1 / -1">
+        <div class="stat-value" style="font-size:16px;color:var(--text)">${nextLabel}</div>
+        <div class="stat-label">Next Meeting</div>
+      </div>
+    `;
   }
 
-  function renderSchedule() {
+  function renderTable() {
     const t = today();
-    const list = document.getElementById('schedule-list');
+    const completions = getCompletions();
+    const tbody = document.getElementById('table-body');
 
-    list.innerHTML = MEETING_DATA.meetings.map(m => {
+    tbody.innerHTML = MEETING_DATA.meetings.map(m => {
       const date = parseDate(m.date);
+      const isPast = date < t;
       const isToday = date.getTime() === t.getTime();
-      const done = isMeetingDone(m);
-      const cd = countdownLabel(m.date);
+      const markedDone = completions.includes(m.num);
+      const isDone = markedDone || isPast;
 
-      let status, statusClass;
-      if (isToday)      { status = 'TODAY';     statusClass = 'TODAY'; }
-      else if (done)    { status = 'COMPLETED';  statusClass = 'COMPLETED'; }
-      else              { status = 'UPCOMING';   statusClass = 'UPCOMING'; }
+      let rowClass = 'meeting-row';
+      if (isDone && !isToday) rowClass += ' completed-row';
+      if (isToday) rowClass += ' today-row';
 
       const chips = m.winners.map(w => `<span class="winner-chip">${escHtml(w)}</span>`).join('');
+      const btnClass = markedDone ? 'mark-btn done' : 'mark-btn';
+      const btnLabel = markedDone ? '✓ Done' : 'Mark Done';
 
       return `
-        <div class="card ${done && !isToday ? 'completed' : ''}" style="margin-bottom:10px;${isToday ? 'border-color:var(--gold);box-shadow:0 0 0 1px var(--gold-border)' : ''}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
-            <div>
-              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);margin-bottom:3px">Meeting ${m.num}</div>
-              <div style="font-size:15px;font-weight:600;color:var(--text)">${formatLong(m.date)}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${cd}</div>
-            </div>
-            <span class="status-badge ${statusClass}">${status}</span>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
-        </div>`;
+        <tr class="${rowClass}" id="row-${m.num}">
+          <td class="meeting-num-cell">${m.num}</td>
+          <td class="meeting-date-cell">${formatShort(m.date)}</td>
+          <td><div class="winners-cell">${chips}</div></td>
+          <td style="white-space:nowrap">
+            ${isToday || !isPast
+              ? `<button class="${btnClass}" id="btn-${m.num}" onclick="toggleDone(${m.num})">${btnLabel}</button>`
+              : `<span style="font-size:12px;color:var(--text-dim)">—</span>`
+            }
+          </td>
+        </tr>`;
     }).join('');
   }
 
-  renderBanner();
-  renderProgress();
-  renderSchedule();
+  function toggleDone(num) {
+    const completions = getCompletions();
+    const idx = completions.indexOf(num);
+    if (idx === -1) completions.push(num);
+    else completions.splice(idx, 1);
+    saveCompletions(completions);
+    renderStats();
+    renderTable();
+  }
+
+  renderStats();
+  renderTable();
 </script>
 
 </body>
