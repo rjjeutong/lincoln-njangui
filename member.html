@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Member — The Meeting 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="container" style="padding-top:20px">
+
+  <a href="members.html" class="back-btn">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Back to Members
+  </a>
+
+  <div id="page-content"></div>
+
+</div>
+
+<script src="assets/data.js"></script>
+<script>
+  // ── Helpers ──────────────────────────────────────
+
+  function today() {
+    const d = new Date(); d.setHours(0,0,0,0); return d;
+  }
+
+  function parseDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatLong(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
+  function formatShort(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric'
+    });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function getCompletions() {
+    try { return JSON.parse(localStorage.getItem('meeting_completions') || '[]'); }
+    catch { return []; }
+  }
+
+  function meetingStatus(dateStr) {
+    const t = today();
+    const d = parseDate(dateStr);
+    const diff = Math.round((d - t) / 86400000);
+    const completions = getCompletions();
+    const meeting = MEETING_DATA.meetings.find(m => m.date === dateStr);
+    const markedDone = meeting && completions.includes(meeting.num);
+    if (diff < 0 || markedDone) return { status: 'COMPLETED', label: 'Passed' };
+    if (diff === 0) return { status: 'TODAY', label: 'Today!' };
+    if (diff === 1) return { status: 'UPCOMING', label: 'Tomorrow' };
+    return { status: 'UPCOMING', label: `In ${diff} days` };
+  }
+
+  // ── Render ────────────────────────────────────────
+
+  function render() {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const content = document.getElementById('page-content');
+
+    const member = MEMBERS.find(m => m.id === id);
+
+    if (!member) {
+      document.title = 'Not Found — The Meeting';
+      content.innerHTML = `
+        <div class="error-state">
+          <h2>Member not found</h2>
+          <p>No member with that ID exists. <a href="index.html" style="color:var(--gold)">Go back</a>.</p>
+        </div>`;
+      return;
+    }
+
+    document.title = `${member.name} — The Meeting 2026`;
+
+    // Find payout meetings
+    const payouts = MEETING_DATA.meetings
+      .map(m => ({
+        ...m,
+        winningSlots: m.winners.filter(w => member.slots.includes(w))
+      }))
+      .filter(m => m.winningSlots.length > 0);
+
+    // ── Header ──────────────────────────────────────
+    let html = `
+      <div class="member-header">
+        <h1 class="member-name">${escHtml(member.name)}</h1>
+        <p class="member-meta">${member.slots.length} slot${member.slots.length !== 1 ? 's' : ''} &middot; ${payouts.length} payout date${payouts.length !== 1 ? 's' : ''}</p>
+      </div>
+    `;
+
+    // ── Your Hand ────────────────────────────────────
+    html += `<p class="section-title" style="margin-bottom:10px">Your Hand</p>`;
+    html += `<div class="card" style="margin-bottom:24px">
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${member.slots.map(s => `<span class="slot-chip">${escHtml(s)}</span>`).join('')}
+      </div>
+    </div>`;
+
+    // ── Payout Dates ─────────────────────────────────
+    html += `<p class="section-title" style="margin-bottom:12px">Your Payout Dates</p>`;
+
+    if (payouts.length === 0) {
+      html += `<div class="card" style="color:var(--text-muted);font-size:14px">No payouts found.</div>`;
+    } else {
+      payouts.forEach(m => {
+        const { status, label } = meetingStatus(m.date);
+        const cardClass = status === 'TODAY' ? 'card today' : status === 'COMPLETED' ? 'card completed' : 'card highlighted';
+        html += `
+          <div class="${cardClass}" style="margin-bottom:12px">
+            <div class="payout-card-top">
+              <div>
+                <div class="payout-meeting-num">Meeting ${m.num}</div>
+                <div class="payout-date">${formatLong(m.date)}</div>
+              </div>
+              <span class="status-badge ${status}">${status}</span>
+            </div>
+            <div class="countdown-text">${label}</div>
+            <div class="payout-slots">
+              ${m.winningSlots.map(s => `<span class="slot-chip">${escHtml(s)}</span>`).join('')}
+            </div>
+          </div>`;
+      });
+    }
+
+    // ── Full Schedule ─────────────────────────────────
+    html += `<p class="section-title" style="margin:28px 0 10px">Full Schedule</p>`;
+    html += `<div>`;
+
+    MEETING_DATA.meetings.forEach(m => {
+      const mySlots = m.winners.filter(w => member.slots.includes(w));
+      const isMine = mySlots.length > 0;
+      const isPast = parseDate(m.date) < today();
+      let rowClass = 'schedule-row';
+      if (isMine) rowClass += ' is-mine';
+      if (isPast) rowClass += ' is-past';
+
+      html += `
+        <div class="${rowClass}">
+          <span class="schedule-row-num">${m.num}</span>
+          <span class="schedule-row-date">${formatShort(m.date)}</span>
+          ${isMine ? `<span class="schedule-row-slot">${mySlots.map(escHtml).join(', ')}</span>` : ''}
+        </div>`;
+    });
+
+    html += `</div>`;
+
+    content.innerHTML = html;
+  }
+
+  render();
+</script>
+
+</body>
+</html>

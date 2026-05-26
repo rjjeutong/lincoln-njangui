@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Meeting — 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <header class="site-header">
+    <h1 class="group-name">The Meeting</h1>
+    <p class="subtitle">Every other Sunday &middot; 14 Meetings &middot; Round 2026</p>
+  </header>
+
+  <div id="next-meeting-banner"></div>
+
+  <div class="progress-section">
+    <div class="progress-label">
+      <span id="progress-text">Loading&hellip;</span>
+      <span class="progress-count" id="progress-count"></span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+    </div>
+  </div>
+
+  <p class="section-title" style="margin-bottom:12px">Schedule</p>
+  <div id="schedule-list"></div>
+
+  <nav style="display:flex;gap:10px;justify-content:center;padding:28px 0 8px;border-top:1px solid var(--border);margin-top:12px">
+    <a href="members.html" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:13px;font-weight:500;padding:9px 18px;text-decoration:none;transition:all 0.15s" onmouseover="this.style.color='var(--gold)';this.style.borderColor='var(--gold-border)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">👥 Members</a>
+    <a href="admin.html" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-muted);font-size:13px;font-weight:500;padding:9px 18px;text-decoration:none;transition:all 0.15s" onmouseover="this.style.color='var(--gold)';this.style.borderColor='var(--gold-border)'" onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border)'">⚙ Organizer</a>
+  </nav>
+
+</div>
+
+<script src="assets/data.js"></script>
+<script>
+  function today() {
+    const d = new Date(); d.setHours(0,0,0,0); return d;
+  }
+
+  function parseDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatLong(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
+  function countdownLabel(str) {
+    const diff = Math.round((parseDate(str) - today()) / 86400000);
+    if (diff < 0) return 'Passed';
+    if (diff === 0) return 'Today!';
+    if (diff === 1) return 'Tomorrow';
+    return `In ${diff} days`;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function getCompletions() {
+    try { return JSON.parse(localStorage.getItem('meeting_completions') || '[]'); }
+    catch { return []; }
+  }
+
+  function isMeetingDone(m) {
+    return getCompletions().includes(m.num) || parseDate(m.date) < today();
+  }
+
+  function renderBanner() {
+    const t = today();
+    const next = MEETING_DATA.meetings.find(m => parseDate(m.date) >= t);
+    const el = document.getElementById('next-meeting-banner');
+    if (!next) {
+      el.innerHTML = `<div class="next-meeting-banner"><span class="banner-icon">🏁</span>
+        <div class="banner-text"><div class="banner-label">All meetings complete</div>
+        <div class="banner-date">Round 2026 is done!</div></div></div>`;
+      return;
+    }
+    const cd = countdownLabel(next.date);
+    el.innerHTML = `<div class="next-meeting-banner">
+      <span class="banner-icon">${cd === 'Today!' ? '🎉' : '📅'}</span>
+      <div class="banner-text">
+        <div class="banner-label">${cd === 'Today!' ? 'Meeting Today' : 'Next Meeting — #' + next.num}</div>
+        <div class="banner-date">${formatLong(next.date)}</div>
+        <div class="banner-countdown">${cd}</div>
+      </div></div>`;
+  }
+
+  function renderProgress() {
+    const total = MEETING_DATA.totalMeetings;
+    const done = MEETING_DATA.meetings.filter(isMeetingDone).length;
+    document.getElementById('progress-text').textContent = `${done} of ${total} meetings completed`;
+    document.getElementById('progress-count').textContent = `${done}/${total}`;
+    document.getElementById('progress-bar').style.width = `${(done / total) * 100}%`;
+  }
+
+  function renderSchedule() {
+    const t = today();
+    const list = document.getElementById('schedule-list');
+
+    list.innerHTML = MEETING_DATA.meetings.map(m => {
+      const date = parseDate(m.date);
+      const isToday = date.getTime() === t.getTime();
+      const done = isMeetingDone(m);
+      const cd = countdownLabel(m.date);
+
+      let status, statusClass;
+      if (isToday)      { status = 'TODAY';     statusClass = 'TODAY'; }
+      else if (done)    { status = 'COMPLETED';  statusClass = 'COMPLETED'; }
+      else              { status = 'UPCOMING';   statusClass = 'UPCOMING'; }
+
+      const chips = m.winners.map(w => `<span class="winner-chip">${escHtml(w)}</span>`).join('');
+
+      return `
+        <div class="card ${done && !isToday ? 'completed' : ''}" style="margin-bottom:10px;${isToday ? 'border-color:var(--gold);box-shadow:0 0 0 1px var(--gold-border)' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px">
+            <div>
+              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);margin-bottom:3px">Meeting ${m.num}</div>
+              <div style="font-size:15px;font-weight:600;color:var(--text)">${formatLong(m.date)}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${cd}</div>
+            </div>
+            <span class="status-badge ${statusClass}">${status}</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
+        </div>`;
+    }).join('');
+  }
+
+  renderBanner();
+  renderProgress();
+  renderSchedule();
+</script>
+
+</body>
+</html>

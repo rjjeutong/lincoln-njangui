@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organizer View — The Meeting 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .action-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    .print-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .print-btn:hover { border-color: var(--gold-border); color: var(--gold); }
+    .table-wrap { overflow-x: auto; }
+    @media (max-width: 480px) {
+      .meeting-table .meeting-date-cell { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" style="padding-top:20px">
+
+  <a href="index.html" class="back-btn">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Back to Members
+  </a>
+
+  <h1 class="page-title">Organizer View</h1>
+  <p class="page-subtitle">The Meeting &mdash; Round 2026</p>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="print-btn" onclick="window.print()">Print Schedule</button>
+  </div>
+
+  <!-- Schedule Table -->
+  <div class="table-wrap">
+    <table class="meeting-table" id="meeting-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Winners (6 slots)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="assets/data.js"></script>
+<script>
+  // ── Helpers ──────────────────────────────────────
+
+  function today() {
+    const d = new Date(); d.setHours(0,0,0,0); return d;
+  }
+
+  function parseDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatShort(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+  }
+
+  function formatLong(str) {
+    return parseDate(str).toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function getCompletions() {
+    try { return JSON.parse(localStorage.getItem('meeting_completions') || '[]'); }
+    catch { return []; }
+  }
+
+  function saveCompletions(arr) {
+    localStorage.setItem('meeting_completions', JSON.stringify(arr));
+  }
+
+  function isMeetingDone(num) {
+    const m = MEETING_DATA.meetings.find(x => x.num === num);
+    if (!m) return false;
+    return getCompletions().includes(num) || parseDate(m.date) < today();
+  }
+
+  // ── Stats ─────────────────────────────────────────
+
+  function renderStats() {
+    const t = today();
+    const total = MEETING_DATA.totalMeetings;
+    const done = MEETING_DATA.meetings.filter(m => isMeetingDone(m.num)).length;
+    const remaining = total - done;
+    const next = MEETING_DATA.meetings.find(m => parseDate(m.date) >= t);
+    const nextLabel = next ? formatLong(next.date) : 'All done!';
+
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--green)">${done}</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--blue)">${remaining}</div>
+        <div class="stat-label">Remaining</div>
+      </div>
+      <div class="stat-card" style="grid-column: 1 / -1">
+        <div class="stat-value" style="font-size:15px;color:var(--text)">${nextLabel}</div>
+        <div class="stat-label">Next Meeting</div>
+      </div>
+    `;
+  }
+
+  // ── Table ─────────────────────────────────────────
+
+  function renderTable() {
+    const t = today();
+    const completions = getCompletions();
+    const tbody = document.getElementById('table-body');
+
+    tbody.innerHTML = MEETING_DATA.meetings.map(m => {
+      const date = parseDate(m.date);
+      const isPast = date < t;
+      const isToday = date.getTime() === t.getTime();
+      const markedDone = completions.includes(m.num);
+      const isDone = markedDone || isPast;
+
+      let rowClass = 'meeting-row';
+      if (isDone && !isToday) rowClass += ' completed-row';
+      if (isToday) rowClass += ' today-row';
+
+      const chips = m.winners.map(w => `<span class="winner-chip">${escHtml(w)}</span>`).join('');
+
+      const btnClass = markedDone ? 'mark-btn done' : 'mark-btn';
+      const btnLabel = markedDone ? '✓ Done' : 'Mark Done';
+
+      return `
+        <tr class="${rowClass}" id="row-${m.num}">
+          <td class="meeting-num-cell">${m.num}</td>
+          <td class="meeting-date-cell">${formatShort(m.date)}</td>
+          <td><div class="winners-cell">${chips}</div></td>
+          <td style="white-space:nowrap">
+            ${isToday || !isPast
+              ? `<button class="${btnClass}" id="btn-${m.num}" onclick="toggleDone(${m.num})">${btnLabel}</button>`
+              : `<span style="font-size:11px;color:var(--text-dim)">—</span>`
+            }
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  function toggleDone(num) {
+    const completions = getCompletions();
+    const idx = completions.indexOf(num);
+    if (idx === -1) completions.push(num);
+    else completions.splice(idx, 1);
+    saveCompletions(completions);
+    renderStats();
+    renderTable();
+  }
+
+  // ── Init ─────────────────────────────────────────
+
+  renderStats();
+  renderTable();
+</script>
+
+</body>
+</html>

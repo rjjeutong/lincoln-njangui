@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Members — The Meeting 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="container" style="padding-top:20px">
+
+  <a href="index.html" class="back-btn">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Back to Calendar
+  </a>
+
+  <header class="site-header" style="padding-top:0;text-align:left">
+    <h1 class="group-name" style="font-size:clamp(22px,5vw,30px)">Members</h1>
+    <p class="subtitle" style="text-align:left">Tap your name to see your payout schedule</p>
+  </header>
+
+  <p class="section-title" style="margin-bottom:12px" id="member-count"></p>
+  <div class="members-grid" id="members-grid"></div>
+
+  <footer class="site-footer">
+    <a href="admin.html" class="organizer-link">⚙ Organizer View</a>
+  </footer>
+
+</div>
+
+<script src="assets/data.js"></script>
+<script>
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  const sorted = [...MEMBERS].sort((a, b) => a.name.localeCompare(b.name));
+
+  document.getElementById('member-count').textContent =
+    `${sorted.length} Members`;
+
+  document.getElementById('members-grid').innerHTML = sorted.map(m => `
+    <a class="member-card" href="member.html?id=${encodeURIComponent(m.id)}">
+      <div class="member-card-name">${escHtml(m.name)}</div>
+      <div class="member-card-slots">${m.slots.length} slot${m.slots.length !== 1 ? 's' : ''}</div>
+    </a>
+  `).join('');
+</script>
+
+</body>
+</html>
