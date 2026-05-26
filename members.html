@@ -8,6 +8,75 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .members-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .members-table th {
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-dim);
+      padding: 0 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .members-table td {
+      padding: 13px 10px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+      font-size: 15px;
+    }
+
+    .members-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .member-name-link {
+      color: var(--gold);
+      text-decoration: none;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .member-name-link:hover { opacity: 0.75; }
+
+    .slot-count {
+      color: var(--text-muted);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .payout-dates {
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .payout-date-item {
+      display: inline-block;
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+
+    .payout-date-item.passed {
+      color: var(--text-dim);
+      text-decoration: line-through;
+      text-decoration-color: var(--text-dim);
+    }
+
+    .payout-date-item.upcoming {
+      color: var(--text);
+    }
+
+    .payout-date-item.today {
+      color: var(--gold);
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
 
@@ -17,40 +86,78 @@
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    Back to Calendar
+    Back to Schedule
   </a>
 
   <header class="site-header" style="padding-top:0;text-align:left">
     <h1 class="group-name" style="font-size:clamp(22px,5vw,30px)">Members</h1>
-    <p class="subtitle" style="text-align:left">Tap your name to see your payout schedule</p>
+    <p class="subtitle" style="text-align:left" id="member-count"></p>
   </header>
 
-  <p class="section-title" style="margin-bottom:12px" id="member-count"></p>
-  <div class="members-grid" id="members-grid"></div>
-
-  <footer class="site-footer">
-    <a href="admin.html" class="organizer-link">⚙ Organizer View</a>
-  </footer>
+  <table class="members-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th style="text-align:center">Slots</th>
+        <th>Payout Date(s)</th>
+      </tr>
+    </thead>
+    <tbody id="members-tbody"></tbody>
+  </table>
 
 </div>
 
 <script src="assets/data.js"></script>
 <script>
+  function today() {
+    const d = new Date(); d.setHours(0,0,0,0); return d;
+  }
+
+  function parseDate(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function formatDate(str) {
+    return parseDate(str).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
   function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  const t = today();
   const sorted = [...MEMBERS].sort((a, b) => a.name.localeCompare(b.name));
 
   document.getElementById('member-count').textContent =
-    `${sorted.length} Members`;
+    `${sorted.length} members · tap a name for full details`;
 
-  document.getElementById('members-grid').innerHTML = sorted.map(m => `
-    <a class="member-card" href="member.html?id=${encodeURIComponent(m.id)}">
-      <div class="member-card-name">${escHtml(m.name)}</div>
-      <div class="member-card-slots">${m.slots.length} slot${m.slots.length !== 1 ? 's' : ''}</div>
-    </a>
-  `).join('');
+  document.getElementById('members-tbody').innerHTML = sorted.map(member => {
+    // Find all meetings where this member wins
+    const payouts = MEETING_DATA.meetings.filter(m =>
+      m.winners.some(w => member.slots.includes(w))
+    );
+
+    const dateItems = payouts.map(m => {
+      const d = parseDate(m.date);
+      const diff = Math.round((d - t) / 86400000);
+      let cls = 'payout-date-item upcoming';
+      if (diff < 0) cls = 'payout-date-item passed';
+      else if (diff === 0) cls = 'payout-date-item today';
+      return `<span class="${cls}">${formatDate(m.date)}</span>`;
+    }).join('');
+
+    const datesHtml = payouts.length > 0
+      ? `<div class="payout-dates">${dateItems}</div>`
+      : `<span style="color:var(--text-dim);font-size:13px">—</span>`;
+
+    return `
+      <tr>
+        <td><a class="member-name-link" href="member.html?id=${encodeURIComponent(member.id)}">${escHtml(member.name)}</a></td>
+        <td class="slot-count">${member.slots.length}</td>
+        <td>${datesHtml}</td>
+      </tr>`;
+  }).join('');
 </script>
 
 </body>
